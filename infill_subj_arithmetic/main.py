@@ -85,7 +85,7 @@ def train(config, model, tokenizer, vocab_nice_list, rew, rbuffer, dataset):
             if loss_type.startswith('modified'):
                 # choose a behavior policy
                 b_policy_choice = random.randint(0, 3)
-                reward_fn = lambda x: rew.score(
+                reward_fn = lambda x: rew.score(  # reward function
                                 append_sol_and_remove_eos(x,
                                                         encoded_result.repeat(bsz, 1),
                                                         eos_token_id,
