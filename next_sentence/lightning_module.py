@@ -155,6 +155,7 @@ class NextSentenceGFNTask(LightningModule):
         )
         log_ps = last_log_r * self.reward.temperature
         log_ps_unpenalized = last_log_r_unpenalized * self.reward.temperature
+        
         self.log(
             "train/loss",
             loss,

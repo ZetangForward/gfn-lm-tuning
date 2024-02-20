@@ -186,9 +186,7 @@ class ModelSentenceValidator(SentenceValidator):
             model_name = "textattack/roberta-base-CoLA"
         self.model_name = model_name
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model = AutoModelForSequenceClassification.from_pretrained(
-            model_name, device_map="auto"
-        )
+        self.model = AutoModelForSequenceClassification.from_pretrained(model_name)
 
     @torch.no_grad()
     def __call__(self, sentences, tokenizer):

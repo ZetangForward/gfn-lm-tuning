@@ -17,12 +17,12 @@ from utils import (
 )
 from lightning_module import NextSentenceGFNTask
 from lightning_data import PromptDataModule
-
+from pytorch_lightning.strategies import DDPStrategy
+from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 
 @hydra.main(version_base=None, config_path="./configs/", config_name="train")
 def train(config: DictConfig):
     pl.seed_everything(config.seed, workers=True)
-
     model, tokenizer = get_model(config)
 
     try:  # Some tokenizers encode a "." differently when it is the first token
@@ -42,6 +42,7 @@ def train(config: DictConfig):
     illegal_token_mask[illegal_tokens] = True
     illegal_token_mask = illegal_token_mask.numpy()
 
+    
     reward = get_reward(config, end_of_sentence_token_id, illegal_token_mask)
     reward_buffer = ReplayBuffer(
         buffer_size=config.task.reward.buffer_size,
@@ -82,6 +83,7 @@ def train(config: DictConfig):
         use_4bit=config.task.training.use_4bit,
     )
 
+    print("init trainer")
     trainer = pl.Trainer(
         accelerator=config.device.accelerator,
         max_epochs=config.task.training.epochs,
@@ -89,7 +91,17 @@ def train(config: DictConfig):
         logger=config.logger
         if isinstance(config.logger, bool)
         else hydra.utils.instantiate(config.logger),
-        callbacks=[hydra.utils.instantiate(c) for c in config.task.callbacks],
+        callbacks=[
+            LearningRateMonitor(),
+            ModelCheckpoint(
+                save_top_k=20, 
+                monitor="val_loss",
+                filename="vq-{epoch:02d}",
+                save_last=True,
+                mode='min',
+            ),
+        ],
+        strategy=DDPStrategy(find_unused_parameters=False),
     )
 
     # Fix a bug that arises when using 4-bit quantized models.
@@ -100,6 +112,7 @@ def train(config: DictConfig):
         task.to = MethodType(lambda s, _: s, task)
         task.cuda = MethodType(lambda s: s, task)
 
+    print("begin to train")
     trainer.fit(model=task, datamodule=data)
 
 
@@ -120,7 +133,7 @@ def get_model(config: DictConfig):
         config.task.model.name, add_bos_token=False
     )
     model = AutoModelForCausalLM.from_pretrained(
-        config.task.model.name, device_map="auto", quantization_config=bnb_config
+        config.task.model.name, quantization_config=bnb_config
     )
 
     # Prepare model for k-bit training
