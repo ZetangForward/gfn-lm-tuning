@@ -64,20 +64,17 @@ class NextSentenceGFNTask(LightningModule):
     def forward(self, prompt, n_samples=None, pf_temperature=1.0, action_seq=None):
         assert prompt.ndim == 1
         n_samples = self.hparams.n_samples if n_samples is None else n_samples
+        
         prompt = prompt.unsqueeze(0).expand(n_samples, -1)
+        
         reward_fn = partial(
             self.reward.score,
             prompt_length=prompt.shape[1],
             model=self.model,
             tokenizer=self.tokenizer,
         )
-        (
-            generated_text,
-            log_pf,
-            log_pterm,
-            log_r,
-            log_r_unpenalized,
-        ) = generate_and_return_termination_logprob(
+        
+        generated_text, log_pf, log_pterm, log_r, log_r_unpenalized = generate_and_return_termination_logprob(
             self.model,
             prompt,
             reward_fn=reward_fn,
@@ -89,6 +86,7 @@ class NextSentenceGFNTask(LightningModule):
             skip_rewards=False,
             action_seq=action_seq,
         )
+        
         return generated_text, log_pf, log_pterm, log_r, log_r_unpenalized
 
     def training_step(self, prompt, batch_idx):
@@ -96,20 +94,11 @@ class NextSentenceGFNTask(LightningModule):
         prompt = prompt[0]
 
         # Sample a sentence and get the reward
-        if (
-            random.random() < self.hparams.use_buffer_prob
-            and self.reward_buffer.sample(self.hparams.n_samples, prompt)[0] is not None
-        ):
+        if random.random() < self.hparams.use_buffer_prob and self.reward_buffer.sample(self.hparams.n_samples, prompt)[0] is not None:
             # Using a sample from the reward buffer
-            action_seq, log_r = self.reward_buffer.sample(
-                self.hparams.n_samples, prompt
-            )
-            generated_text, log_pf, log_pterm, _, log_r_unpenalized = self.forward(
-                prompt, action_seq=action_seq
-            )
-            log_r = log_r[
-                :, : generated_text.shape[1] - len(prompt)
-            ]  # Undo padding from buffer
+            action_seq, log_r = self.reward_buffer.sample(self.hparams.n_samples, prompt)
+            generated_text, log_pf, log_pterm, _, log_r_unpenalized = self.forward(prompt, action_seq=action_seq)
+            log_r = log_r[:, : generated_text.shape[1] - len(prompt)]  # Undo padding from buffer
             log_r *= 1 / self.reward.temperature  # redo the effect of reward tempering
         else:
             # Using the forward policy
@@ -121,9 +110,8 @@ class NextSentenceGFNTask(LightningModule):
                 )
             else:  # Without tempering
                 pf_temp = 1.0
-            generated_text, log_pf, log_pterm, log_r, log_r_unpenalized = self.forward(
-                prompt, pf_temperature=pf_temp
-            )
+            generated_text, log_pf, log_pterm, log_r, log_r_unpenalized = self.forward(prompt, pf_temperature=pf_temp)
+            
             self.reward_buffer.add_batch(
                 prompt=prompt,
                 sentences=generated_text[:, len(prompt) :],

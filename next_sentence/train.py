@@ -19,6 +19,10 @@ from lightning_module import NextSentenceGFNTask
 from lightning_data import PromptDataModule
 from pytorch_lightning.strategies import DDPStrategy
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
+from pytorch_lightning.loggers import TensorBoardLogger
+import sys
+sys.path.append("/home/amax/zecheng/gfn-lm-tuning/next_sentence")
+
 
 @hydra.main(version_base=None, config_path="./configs/", config_name="train")
 def train(config: DictConfig):
@@ -84,11 +88,12 @@ def train(config: DictConfig):
     )
 
     print("init trainer")
+    tb_logger = TensorBoardLogger(save_dir=config.logger.save_dir) 
     trainer = pl.Trainer(
         accelerator=config.device.accelerator,
         max_epochs=config.task.training.epochs,
         accumulate_grad_batches=config.task.training.accumulate_grad_batches,
-        logger=config.logger
+        logger=tb_logger
         if isinstance(config.logger, bool)
         else hydra.utils.instantiate(config.logger),
         callbacks=[
