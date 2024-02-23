@@ -89,6 +89,7 @@ def train(config: DictConfig):
 
     print("init trainer")
     tb_logger = TensorBoardLogger(save_dir=config.logger.save_dir) 
+    
     trainer = pl.Trainer(
         accelerator=config.device.accelerator,
         max_epochs=config.task.training.epochs,
@@ -100,7 +101,7 @@ def train(config: DictConfig):
             LearningRateMonitor(),
             ModelCheckpoint(
                 save_top_k=20, 
-                monitor="val_loss",
+                monitor="val/loss",
                 filename="vq-{epoch:02d}",
                 save_last=True,
                 mode='min',
